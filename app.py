@@ -1,6 +1,6 @@
 # app.py
 import os
-import dash
+import nltk
 from dash import Dash, html, dcc, Input, Output
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -10,21 +10,32 @@ import yfinance as yf
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from nltk.sentiment import SentimentIntensityAnalyzer
-import nltk
 
-nltk_data_path = "/opt/render/nltk_data"
-os.makedirs(nltk_data_path, exist_ok=True)
-nltk.data.path.append(nltk_data_path)
+# ================== NLTK CONFIGURATION ================== #
+# Render-compatible path setup
+NLTK_DIR = os.path.join(os.getcwd(), "nltk_data")
+
+# Create directory if it doesn't exist
+os.makedirs(NLTK_DIR, exist_ok=True)
+
+# Set environment variable
+os.environ['NLTK_DATA'] = NLTK_DIR
+
+# Add to nltk's path
+nltk.data.path.append(NLTK_DIR)
+
+# Download VADER lexicon if missing
+try:
+    nltk.data.find('sentiment/vader_lexicon')
+except LookupError:
+    print("Downloading VADER lexicon...")
+    nltk.download('vader_lexicon', download_dir=NLTK_DIR)
+    print("Download complete")
+
+# Initialize sentiment analyzer AFTER configuration
 sia = SentimentIntensityAnalyzer()
 
-# Initialize Dash app
-app = Dash(__name__, 
-          external_stylesheets=[dbc.themes.MATERIA],
-          assets_folder='assets/css',
-          assets_url_path='css')
-server = app.server
-
-# --- Data Fetching Functions with Enhanced Error Handling ---
+# ================== DATA FUNCTIONS ================== #
 def fetch_wikipedia_views(topic="Climate_policy", days=30):
     try:
         end_date = datetime.now()
@@ -83,7 +94,7 @@ def fetch_arxiv_papers(query="carbon capture"):
         print(f"arXiv API Error: {e}")
         return pd.DataFrame()
 
-# --- Data Processing ---
+# ================== DATA PROCESSING ================== #
 def get_merged_data():
     try:
         web = fetch_wikipedia_views()
@@ -99,7 +110,14 @@ def get_merged_data():
         print(f"Data Merge Error: {e}")
         return pd.DataFrame()
 
-# --- Responsive UI Layout ---
+# ================== APP LAYOUT ================== #
+app = Dash(__name__, 
+          external_stylesheets=[dbc.themes.MATERIA],
+          assets_folder='assets',
+          assets_url_path='assets')
+
+server = app.server
+
 app.layout = dbc.Container(fluid=True, children=[
     dbc.NavbarSimple(
         brand="Trend Intelligence Dashboard",
@@ -134,7 +152,7 @@ app.layout = dbc.Container(fluid=True, children=[
     dcc.Interval(id='refresh', interval=3600*1000)
 ])
 
-# --- Callbacks for Live Updates ---
+# ================== CALLBACKS ================== #
 @app.callback(
     [Output('web-views', 'figure'),
      Output('news-sentiment', 'figure'),
