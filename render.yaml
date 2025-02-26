@@ -12,3 +12,11 @@ services:
     envVars:
       - key: NLTK_DATA
         value: /opt/render/nltk_data
+      
+      # Get free key: https://newsapi.org/register
+      - key: NEWSAPI_KEY
+        value: your_newsapi_key  # Replace after registration
+      
+      # Get free key: https://www.alphavantage.co/support/#api-key
+      - key: ALPHAVANTAGE_KEY
+        value: your_alphavantage_key  # Replace after registration
