@@ -3,7 +3,6 @@ services:
     name: trend-dashboard
     runtime: python
     buildCommand: |
-      mkdir -p /opt/render/.nltk_data
       pip install --upgrade pip
       pip install -r requirements.txt
     startCommand: gunicorn app:server
