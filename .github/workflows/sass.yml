@@ -1,0 +1,12 @@
+name: Compile Sass
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Compile Sass
+      uses: sass/dart-sass-action@v1
+      with:
+        source: assets/scss/main.scss
+        destination: assets/css/compiled.css
