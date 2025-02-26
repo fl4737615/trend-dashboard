@@ -9,3 +9,4 @@ services:
     envVars:
       - key: NLTK_DATA
         value: /opt/render/nltk_data
+    plan: free
