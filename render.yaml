@@ -2,26 +2,26 @@ services:
   - type: web
     name: trend-matrix-pro
     runtime: python
-    pythonVersion: "3.10.10"
+    pythonVersion: "3.10.10"  # Explicit Python version
     buildCommand: |
       mkdir -p "${NLTK_DATA}"
       pip install --upgrade pip
       pip install --use-pep517 --prefer-binary -r requirements.txt
       python -c "import nltk; nltk.download('vader_lexicon', download_dir='${NLTK_DATA}')"
-    startCommand: gunicorn --workers 2 --timeout 120 app:server
+    startCommand: gunicorn --workers 2 --timeout 120 app:server  # Corrected server reference
     plan: free
     envVars:
       - key: NLTK_DATA
         value: /opt/render/nltk_data
       - key: NEWSAPI_KEY
-        value: your_newsapi_key  # REPLACE
+        value: your_newsapi_key  # REPLACE THIS
       - key: ALPHAVANTAGE_KEY
-        value: your_alphavantage_key  # REPLACE
+        value: your_alphavantage_key  # REPLACE THIS
       - key: OMP_NUM_THREADS
-        value: 2
+        value: 2  # Prevent OMP over-threading
       - key: TOKENIZERS_PARALLELISM
-        value: "false"
+        value: "false"  # Disable HuggingFace parallelism
       - key: CARGO_HOME
-        value: /opt/render/.cargo
+        value: /opt/render/.cargo  # Rust workaround
       - key: RUSTUP_HOME
         value: /opt/render/.rustup
