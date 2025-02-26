@@ -3,10 +3,11 @@ services:
     name: trend-matrix-pro
     runtime: python
     buildCommand: |
-      mkdir -p /opt/render/nltk_data
-      pip install --upgrade pip
-      pip install -r requirements.txt
-      python -c "import nltk; nltk.download('vader_lexicon', download_dir='/opt/render/nltk_data')"
+  mkdir -p /opt/render/nltk_data
+  pip install --upgrade pip
+  pip install numpy==1.24.3  # Explicit install first
+  pip install -r requirements.txt
+  python -c "import nltk; nltk.download('vader_lexicon', download_dir='/opt/render/nltk_data')"
     startCommand: gunicorn app:server
     plan: free
     envVars:
