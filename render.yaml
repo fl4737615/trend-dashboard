@@ -3,6 +3,8 @@ services:
     name: trend-dashboard
     runtime: python
     buildCommand: |
+      pip install --upgrade pip
+      pip install numpy==1.24.3
       pip install -r requirements.txt
       python -c "import nltk; nltk.download('vader_lexicon', download_dir='/opt/render/nltk_data')"
     startCommand: gunicorn app:server
