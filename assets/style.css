@@ -1,0 +1,72 @@
+:root {
+  --primary: #1a252f;
+  --secondary: #7f8c8d;
+  --success: #27ae60;
+  --danger: #e74c3c;
+  --warning: #f1c40f;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.header {
+  text-align: center;
+  padding: 2rem 0;
+  color: var(--primary);
+  font-size: 2.5rem;
+}
+
+.trend-card {
+  background: white;
+  border-radius: 12px;
+  margin: 0.5rem;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+  transition: var(--transition);
+  animation: cardEntrance 0.6s ease-out;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  will-change: transform, box-shadow;
+  backface-visibility: hidden;
+}
+
+.trend-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+}
+
+.confidence-bar {
+  height: 4px;
+  border-radius: 2px;
+  transition: var(--transition);
+}
+
+.confidence-bar[data-score="1"] { background: var(--danger); }
+.confidence-bar[data-score="2"] { background: var(--warning); }
+.confidence-bar[data-score="3"] { background: var(--success); }
+.confidence-bar[data-score="4"] { background: var(--success); }
+
+.source-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: #f0f0f0;
+  border-radius: 1rem;
+  margin: 0.25rem;
+  display: inline-block;
+}
+
+@keyframes cardEntrance {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 768px) {
+  .trend-card {
+    margin: 0.25rem;
+    min-height: clamp(100px, 15vh, 120px);
+  }
+  
+  .header {
+    font-size: 1.75rem;
+    padding: 1rem 0;
+  }
+}
