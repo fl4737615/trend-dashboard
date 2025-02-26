@@ -2,11 +2,12 @@ services:
   - type: web
     name: trend-matrix-pro
     runtime: python
+    pythonVersion: "3.10.10"
     buildCommand: |
       mkdir -p "${NLTK_DATA}"
       pip install --upgrade pip
       pip install -r requirements.txt
-      python -m nltk.downloader -d "${NLTK_DATA}" vader_lexicon
+      python -c "import nltk; nltk.download('vader_lexicon', download_dir='${NLTK_DATA}')"
     startCommand: gunicorn --workers 2 --timeout 120 app:server
     plan: free
     envVars:
