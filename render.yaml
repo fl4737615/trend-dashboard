@@ -1,8 +1,11 @@
 services:
-- type: web
-  name: trend-dashboard
-  runtime: python
-  buildCommand: |
-    pip install -r requirements.txt
-    python -m nltk.downloader vader_lexicon
-  startCommand: gunicorn app:server
+  - type: web
+    name: trend-dashboard
+    runtime: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python -c "import nltk; nltk.download('vader_lexicon', download_dir='/opt/render/nltk_data')"
+    startCommand: gunicorn app:server
+    envVars:
+      - key: NLTK_DATA
+        value: /opt/render/nltk_data
