@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: trend-matrix
+    name: trend-matrix-pro
     runtime: python
     buildCommand: |
       mkdir -p /opt/render/nltk_data
