@@ -14,9 +14,9 @@ services:
       - key: NLTK_DATA
         value: /opt/render/nltk_data
       - key: NEWSAPI_KEY
-        value: your_newsapi_key
+        value: your_newsapi_key  # REPLACE
       - key: ALPHAVANTAGE_KEY
-        value: your_alphavantage_key
+        value: your_alphavantage_key  # REPLACE
       - key: OMP_NUM_THREADS
         value: 2
       - key: TOKENIZERS_PARALLELISM
