@@ -1,9 +1,14 @@
 services:
   - type: web
-    name: trend-dashboard
+    name: trend-matrix
     runtime: python
     buildCommand: |
+      mkdir -p /opt/render/nltk_data
       pip install --upgrade pip
       pip install -r requirements.txt
+      python -c "import nltk; nltk.download('vader_lexicon', download_dir='/opt/render/nltk_data')"
     startCommand: gunicorn app:server
     plan: free
+    envVars:
+      - key: NLTK_DATA
+        value: /opt/render/nltk_data
