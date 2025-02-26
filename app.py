@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from nltk.sentiment import SentimentIntensityAnalyzer
 import nltk
 
-# Configure NLTK data path for Render
-nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
+nltk_data_path = "/opt/render/nltk_data"
+os.makedirs(nltk_data_path, exist_ok=True)
 nltk.data.path.append(nltk_data_path)
 sia = SentimentIntensityAnalyzer()
 
