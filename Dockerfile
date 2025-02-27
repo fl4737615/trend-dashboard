@@ -11,21 +11,22 @@ WORKDIR /app
 # Create directories for persistent caching
 RUN mkdir -p $NLTK_DATA $TRANSFORMERS_CACHE
 
-# Copy only the requirements to leverage Docker caching
+# Copy only the requirements file to leverage Docker caching
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir --use-pep517 --prefer-binary -r requirements.txt
 
-# Download NLTK data (vader lexicon) into the designated directory
+# Download the NLTK vader lexicon into the designated directory
 RUN python -c "import nltk; nltk.download('vader_lexicon', download_dir='$NLTK_DATA')"
 
-# Copy the rest of your application code
+# Copy the rest of the application code
 COPY . .
 
-# Expose the port (adjust if needed)
+# Expose the port (default to 8000)
 EXPOSE 8000
 
-# Start the application via Gunicorn (using app:app.server so that Dash’s Flask server is served)
-CMD ["gunicorn", "--workers", "1", "--threads", "2", "--timeout", "180", "app:app.server"]
+# Use shell form for CMD so that the environment variable substitution works.
+# This binds to 0.0.0.0:${PORT:-8000} (i.e. use PORT if provided, otherwise 8000)
+CMD gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 2 --timeout 180 app:server
