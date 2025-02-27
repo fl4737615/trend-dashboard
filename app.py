@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from flask import Flask
+import dash
 from dash import Dash, html, dcc, Input, Output, no_update, State
 import dash_bootstrap_components as dbc
 from sentence_transformers import SentenceTransformer
