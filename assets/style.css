@@ -70,3 +70,68 @@
     padding: 1rem 0;
   }
 }
+
+/* Add these to existing styles */
+.loading-spinner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+}
+
+.diagnostic-pill {
+  background: rgba(255,255,255,0.1);
+  border-radius: 15px;
+  padding: 0.3rem 0.8rem;
+  margin: 0.2rem;
+  font-size: 0.8rem;
+  display: inline-block;
+}
+
+.source-status {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.source-tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.source-success {
+  background: #27ae6020;
+  color: #27ae60;
+}
+
+.source-failure {
+  background: #e74c3c20;
+  color: #e74c3c;
+}
+
+.performance-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.metric-card {
+  background: #ffffff10;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #f1c40f;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
