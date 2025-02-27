@@ -27,6 +27,5 @@ COPY . .
 # Expose the port (default to 8000)
 EXPOSE 8000
 
-# Use shell form for CMD so that the environment variable substitution works.
-# This binds to 0.0.0.0:${PORT:-8000} (i.e. use PORT if provided, otherwise 8000)
+# Bind to 0.0.0.0:${PORT:-8000} so that Northflank detects the open port.
 CMD gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 2 --timeout 180 app:server
