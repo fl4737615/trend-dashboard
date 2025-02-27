@@ -1,8 +1,8 @@
+version: 1
 services:
   - type: web
     name: trend-matrix-pro
     runtime: python
-    pythonVersion: "3.10.10"
     buildCommand: |
       mkdir -p "${NLTK_DATA}"
       mkdir -p /opt/render/.cache/huggingface/hub
