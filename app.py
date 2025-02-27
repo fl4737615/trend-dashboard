@@ -28,7 +28,7 @@ THREADPOOL_MAX_WORKERS = int(os.getenv('THREADPOOL_MAX_WORKERS', '2'))  # Reduce
 REFRESH_INTERVAL_MS = int(os.getenv('REFRESH_INTERVAL_MS', str(300 * 1000)))  # 5 minutes
 
 # Set up persistent caching
-CACHE_DIR = "/opt/render/cache"
+CACHE_DIR = "/opt/app/cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 NLTK_DIR = os.path.join(CACHE_DIR, "nltk_data")
 os.makedirs(NLTK_DIR, exist_ok=True)
@@ -36,15 +36,15 @@ os.makedirs(NLTK_DIR, exist_ok=True)
 nltk.data.path.append(NLTK_DIR)
 nltk.download('vader_lexicon', download_dir=NLTK_DIR, quiet=True)
 
-# ========== SERVER CONFIGURATION ==========
-server = Flask(__name__)
+# ========== DASH APPLICATION SETUP ==========
+# Let Dash create its own Flask server and then export it.
 app = Dash(
     __name__,
-    server=server,
     external_stylesheets=[dbc.themes.LUX],
     assets_folder="assets",
     meta_tags=[{'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}]
 )
+server = app.server
 
 @server.route('/health')
 def health_check():
@@ -397,4 +397,5 @@ def error_card(message="Temporary data outage - next scan in 5 minutes"):
 
 if __name__ == "__main__":
     print("Starting application server")
-    app.run_server(debug=False)
+    app.run_server(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    
