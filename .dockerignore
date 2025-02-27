@@ -1,0 +1,28 @@
+# Exclude Git metadata and version control files
+.git
+.gitignore
+
+# Exclude Docker and CI configuration files that are not needed in the build context
+Dockerfile*
+docker-compose.yml
+
+# Exclude Python virtual environments and caches
+venv/
+.env/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Exclude log files and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Exclude OS-specific files
+.DS_Store
+Thumbs.db
+
+# Exclude editor/IDE directories
+.vscode/
+.idea/
