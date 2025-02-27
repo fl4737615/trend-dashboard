@@ -9,16 +9,14 @@ services:
       pip install --upgrade pip
       pip install --no-cache-dir --use-pep517 --prefer-binary -r requirements.txt
       python -c "import nltk; nltk.download('vader_lexicon', download_dir='${NLTK_DATA}')"
-      # The following model caching step is removed to lower memory usage during build:
-      # python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || echo "Model cache attempt completed"
     startCommand: |
-      gunicorn --workers 1 --threads 2 --timeout 180 app:server
+      gunicorn --workers 1 --threads 2 --timeout 180 --lazy-apps app:server
     plan: free
     envVars:
       - key: NLTK_DATA
-        value: /opt/render/nltk_data
+        value: /opt/render/cache/nltk_data
       - key: TRANSFORMERS_CACHE
-        value: /opt/render/.cache/huggingface/hub
+        value: /opt/render/cache/huggingface
       - key: OMP_NUM_THREADS
         value: 1
       - key: TOKENIZERS_PARALLELISM
