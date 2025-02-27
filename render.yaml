@@ -9,19 +9,20 @@ services:
       pip install --upgrade pip
       pip install --use-pep517 --prefer-binary -r requirements.txt
       python -c "import nltk; nltk.download('vader_lexicon', download_dir='${NLTK_DATA}')"
-      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-    startCommand: gunicorn --workers 1 --timeout 180 app:server
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || echo "Model cache attempt completed"
+    startCommand: |
+      gunicorn --workers 1 --threads 2 --timeout 180 --preload app:server
     plan: free
     envVars:
       - key: NLTK_DATA
         value: /opt/render/nltk_data
       - key: TRANSFORMERS_CACHE
         value: /opt/render/.cache/huggingface/hub
-      - key: NEWSAPI_KEY
-        value: your_newsapi_key  # REPLACE
-      - key: ALPHAVANTAGE_KEY
-        value: your_alphavantage_key  # REPLACE
       - key: OMP_NUM_THREADS
-        value: 2
+        value: 1
       - key: TOKENIZERS_PARALLELISM
         value: "false"
+      - key: NEWSAPI_KEY
+        value: your_newsapi_key
+      - key: ALPHAVANTAGE_KEY
+        value: your_alphavantage_key
