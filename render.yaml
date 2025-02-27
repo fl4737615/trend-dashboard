@@ -12,7 +12,7 @@ services:
       # The following model caching step is removed to lower memory usage during build:
       # python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || echo "Model cache attempt completed"
     startCommand: |
-      gunicorn --workers 1 --threads 2 --timeout 180 --preload app:server
+      gunicorn --workers 1 --threads 2 --timeout 180 app:server
     plan: free
     envVars:
       - key: NLTK_DATA
