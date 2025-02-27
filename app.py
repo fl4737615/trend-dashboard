@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from flask import Flask
-import dash
+import dash  # Needed for dash.callback_context
 from dash import Dash, html, dcc, Input, Output, no_update, State
 import dash_bootstrap_components as dbc
 from sentence_transformers import SentenceTransformer
@@ -18,6 +18,13 @@ from sklearn.cluster import DBSCAN
 from collections import defaultdict
 from tenacity import retry, stop_after_attempt, wait_exponential
 from defusedxml.lxml import parse as defused_parse
+
+# ========== EXTERNAL CONFIGURATION ==========
+# Externalize parameters with defaults for flexibility and performance tuning.
+DBSCAN_EPS = float(os.getenv('DBSCAN_EPS', '0.35'))
+DBSCAN_MIN_SAMPLES = int(os.getenv('DBSCAN_MIN_SAMPLES', '2'))
+THREADPOOL_MAX_WORKERS = int(os.getenv('THREADPOOL_MAX_WORKERS', '4'))
+REFRESH_INTERVAL_MS = int(os.getenv('REFRESH_INTERVAL_MS', str(300 * 1000)))  # default 300000 ms (5 minutes)
 
 # ========== INITIALIZATION SEQUENCE ==========
 print("Application bootstrap sequence started")
@@ -51,7 +58,8 @@ except Exception as e:
 # ========== TREND ENGINE ==========
 class TrendRadar:
     _model = None
-    
+    _shared_session = None  # Shared requests session
+
     @classmethod
     def get_model(cls):
         if not cls._model:
@@ -63,12 +71,18 @@ class TrendRadar:
                 print(f"Model failed to load: {str(e)}")
                 raise
         return cls._model
-    
+
+    @classmethod
+    def get_shared_session(cls):
+        if not cls._shared_session:
+            cls._shared_session = requests.Session()
+            cls._shared_session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        return cls._shared_session
+
     def __init__(self):
         self.model = self.get_model()
         self.sia = nltk.sentiment.vader.SentimentIntensityAnalyzer()
-        self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.session = self.get_shared_session()
         self.start_time = datetime.now()
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
@@ -78,9 +92,8 @@ class TrendRadar:
             'errors': [],
             'performance': {}
         }
-
         try:
-            with ThreadPoolExecutor(max_workers=2) as executor:
+            with ThreadPoolExecutor(max_workers=THREADPOOL_MAX_WORKERS) as executor:
                 futures = {
                     executor.submit(self._get_wiki_trends): "web",
                     executor.submit(self._get_news_entities): "news",
@@ -88,7 +101,7 @@ class TrendRadar:
                     executor.submit(self._get_research_pulse): "research"
                 }
 
-                trends = defaultdict(lambda: {'count':0, 'sources':set()})
+                trends = defaultdict(lambda: {'count': 0, 'sources': set()})
                 for future in futures:
                     source_type = futures[future]
                     try:
@@ -130,7 +143,7 @@ class TrendRadar:
                 return []
                 
             embeddings = self.model.encode(entities)
-            clusters = DBSCAN(eps=0.35, min_samples=2).fit_predict(embeddings)
+            clusters = DBSCAN(eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES).fit_predict(embeddings)
             
             scored = []
             for idx, cluster in enumerate(clusters):
@@ -150,6 +163,7 @@ class TrendRadar:
             date = (datetime.now() - timedelta(days=1)).strftime('%Y/%m/%d')
             url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access/{date}"
             response = self.session.get(url, timeout=10)
+            response.raise_for_status()
             return [item['article'] for item in response.json()['items'][0]['articles'][:25]]
         except Exception as e:
             logging.warning(f"Wikipedia failed: {str(e)}")
@@ -158,7 +172,7 @@ class TrendRadar:
     def _get_news_entities(self):
         entities = []
         try:
-            data = requests.get("https://api.gdeltproject.org/api/v2/doc/doc?query=sourcecountry:US&format=json", timeout=15).json()
+            data = self.session.get("https://api.gdeltproject.org/api/v2/doc/doc?query=sourcecountry:US&format=json", timeout=15).json()
             entities += [art['title'] for art in data.get('articles', [])[:30]]
         except Exception as e:
             logging.warning(f"GDELT failed: {str(e)}")
@@ -167,7 +181,7 @@ class TrendRadar:
         if newsapi_key and not newsapi_key.startswith('your_'):
             try:
                 url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={newsapi_key}"
-                newsapi_data = requests.get(url, timeout=10).json()
+                newsapi_data = self.session.get(url, timeout=10).json()
                 entities += [art['title'] for art in newsapi_data.get('articles', [])[:20]]
             except Exception as e:
                 logging.warning(f"NewsAPI failed: {str(e)}")
@@ -177,11 +191,10 @@ class TrendRadar:
     def _get_stock_signals(self):
         entities = []
         av_key = os.getenv('ALPHAVANTAGE_KEY', '')
-        
         if av_key and not av_key.startswith('your_'):
             try:
                 url = f"https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={av_key}"
-                data = requests.get(url, timeout=10).json()
+                data = self.session.get(url, timeout=10).json()
                 gainers = data.get('top_gainers', [])[:3]
                 losers = data.get('top_losers', [])[:3]
                 entities += [entry['ticker'] for entry in gainers + losers]
@@ -190,7 +203,7 @@ class TrendRadar:
         
         try:
             tickers = ['TSLA', 'AAPL', 'AMZN', 'GOOG', 'META']
-            data = yf.download(tickers, period='1d', group_by='ticker')
+            _ = yf.download(tickers, period='1d', group_by='ticker')
             entities += [f"{ticker} Stock" for ticker in tickers]
         except Exception as e:
             logging.warning(f"Yahoo Finance failed: {str(e)}")
@@ -206,9 +219,12 @@ class TrendRadar:
             logging.warning(f"arXiv failed: {str(e)}")
             return []
 
+# Create a shared instance of TrendRadar for all callbacks
+trend_radar_instance = TrendRadar()
+
 # ========== UI COMPONENTS ==========
 app.layout = dbc.Container([
-    dcc.Interval(id='refresh', interval=300*1000, disabled=False),
+    dcc.Interval(id='refresh', interval=REFRESH_INTERVAL_MS, disabled=False),
     dcc.Store(id='debug-store', data={'logs': [], 'status': 'init'}),
     
     dbc.Row([
@@ -222,6 +238,13 @@ app.layout = dbc.Container([
             ), width=4
         )
     ]),
+    
+    dbc.Row(
+        dbc.Col(
+            dbc.Button("Refresh Trends", id="refresh-button", color="primary", className="refresh-button"),
+            width=12
+        )
+    ),
     
     dbc.Row(
         dbc.Col(
@@ -261,12 +284,14 @@ app.layout = dbc.Container([
      Output('init-alert', 'children'),
      Output('init-alert', 'color'),
      Output('init-alert', 'style')],
-    [Input('refresh', 'n_intervals')],
+    [Input('refresh', 'n_intervals'),
+     Input('refresh-button', 'n_clicks')],
     [State('debug-store', 'data')],
     prevent_initial_call=False
 )
-def update_interface(n_intervals, stored_data):
+def update_interface(n_intervals, refresh_clicks, stored_data):
     ctx = dash.callback_context
+    # Determine if this is the initial call or a manual/interval trigger
     initial_call = not ctx.triggered
 
     try:
@@ -280,9 +305,7 @@ def update_interface(n_intervals, stored_data):
                 {'display': 'block'}
             )
 
-        engine = TrendRadar()
-        trends, debug_data = engine.get_trends()
-        
+        trends, debug_data = trend_radar_instance.get_trends()
         logs = stored_data.get('logs', [])[-9:] + [{
             'timestamp': datetime.now().isoformat(),
             'status': 'success' if trends else 'empty',
@@ -334,12 +357,12 @@ def update_debug_panel(logs, show_debug):
             [
                 html.Span(f"[{entry['timestamp']}] ", className="debug-time"),
                 html.Span(entry.get('status', 'unknown').upper(), 
-                    className=f"status-{entry.get('status', 'unknown')}"),
+                          className=f"status-{entry.get('status', 'unknown')}"),
                 html.Div([
                     html.Div([
                         html.Span(src, className="source-tag"),
                         html.Span(f"{info['status']} ({info.get('count',0)})", 
-                                className=f"source-{info['status']}")
+                                  className=f"source-{info['status']}")
                     ]) for src, info in entry.get('sources', {}).items()
                 ], className="source-status"),
                 html.Div([
@@ -369,7 +392,7 @@ def create_cards(trends):
                         html.Div(entity, className="trend-title"),
                         html.Div(
                             className="confidence-bar",
-                            style={'width': f'{min(score*25, 100)}%'}
+                            style={'width': f'{min(score * 25, 100)}%'}
                         )
                     ])
                 ),
