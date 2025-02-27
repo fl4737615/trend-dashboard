@@ -18,6 +18,7 @@ from sklearn.cluster import DBSCAN
 from collections import defaultdict
 from tenacity import retry, stop_after_attempt, wait_exponential
 from defusedxml.lxml import parse as defused_parse
+from nltk.sentiment.vader import SentimentIntensityAnalyzer  # Explicit import for sentiment analyzer
 
 # ========== EXTERNAL CONFIGURATION ==========
 # Externalize parameters with defaults for flexibility and performance tuning.
@@ -81,7 +82,7 @@ class TrendRadar:
 
     def __init__(self):
         self.model = self.get_model()
-        self.sia = nltk.sentiment.vader.SentimentIntensityAnalyzer()
+        self.sia = SentimentIntensityAnalyzer()  # Use the explicitly imported analyzer
         self.session = self.get_shared_session()
         self.start_time = datetime.now()
 
