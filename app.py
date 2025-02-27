@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from flask import Flask
-from dash import Dash, html, dcc, Input, Output
+from dash import Dash, html, dcc, Input, Output, no_update, State
 import dash_bootstrap_components as dbc
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import DBSCAN
@@ -18,27 +18,34 @@ from collections import defaultdict
 from tenacity import retry, stop_after_attempt, wait_exponential
 from defusedxml.lxml import parse as defused_parse
 
+# ========== INITIALIZATION SEQUENCE ==========
+print("Application bootstrap sequence started")
+logging.basicConfig(level=logging.INFO)
+
 # ========== SERVER CONFIGURATION ==========
 server = Flask(__name__)
 app = Dash(
     __name__,
     server=server,
     external_stylesheets=[dbc.themes.LUX],
-    assets_folder="assets"  # CRITICAL FIX: Explicit assets path
+    assets_folder="assets",
+    meta_tags=[{'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}]
 )
 
 @server.route('/health')
 def health_check():
-    return "OK", 200
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}, 200
 
 # ========== NLTK SETUP ==========
-NLTK_DIR = os.path.join(os.getenv("NLTK_DATA", "/opt/render/nltk_data"))
-os.makedirs(NLTK_DIR, exist_ok=True)
-nltk.data.path.append(NLTK_DIR)
 try:
-    nltk.data.find('sentiment/vader_lexicon')
-except LookupError:
-    nltk.download('vader_lexicon', download_dir=NLTK_DIR)
+    NLTK_DIR = os.path.join(os.getenv("NLTK_DATA", "/opt/render/nltk_data"))
+    os.makedirs(NLTK_DIR, exist_ok=True)
+    nltk.data.path.append(NLTK_DIR)
+    nltk.download('vader_lexicon', download_dir=NLTK_DIR, quiet=True)
+    print("NLTK initialized successfully")
+except Exception as e:
+    print(f"NLTK failed: {str(e)}")
+    raise
 
 # ========== TREND ENGINE ==========
 class TrendRadar:
@@ -47,38 +54,80 @@ class TrendRadar:
     @classmethod
     def get_model(cls):
         if not cls._model:
-            cls._model = SentenceTransformer('all-MiniLM-L6-v2')
+            try:
+                print("Loading ML model...")
+                cls._model = SentenceTransformer('all-MiniLM-L6-v2')
+                print("Model loaded successfully")
+            except Exception as e:
+                print(f"Model failed to load: {str(e)}")
+                raise
         return cls._model
     
     def __init__(self):
         self.model = self.get_model()
         self.sia = nltk.sentiment.vader.SentimentIntensityAnalyzer()
         self.session = requests.Session()
-    
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1))
+        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.start_time = datetime.now()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=10))
     def get_trends(self):
-        with ThreadPoolExecutor() as executor:
-            futures = {
-                executor.submit(self._get_wiki_trends): "web",
-                executor.submit(self._get_news_entities): "news",
-                executor.submit(self._get_stock_signals): "stocks",
-                executor.submit(self._get_research_pulse): "research"
-            }
-            
-            trends = defaultdict(lambda: {'count':0, 'sources':set()})
-            for future in futures:
-                try:
-                    for entity in future.result():
-                        trends[entity]['count'] += 1
-                        trends[entity]['sources'].add(futures[future])
-                except Exception as e:
-                    logging.error(f"Data source failed: {str(e)}")
-        
-        return self._analyze_trends(trends)
+        debug_data = {
+            'sources': defaultdict(dict),
+            'errors': [],
+            'performance': {}
+        }
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = {
+                    executor.submit(self._get_wiki_trends): "web",
+                    executor.submit(self._get_news_entities): "news",
+                    executor.submit(self._get_stock_signals): "stocks",
+                    executor.submit(self._get_research_pulse): "research"
+                }
+
+                trends = defaultdict(lambda: {'count':0, 'sources':set()})
+                for future in futures:
+                    source_type = futures[future]
+                    try:
+                        result = future.result(timeout=12)
+                        debug_data['sources'][source_type] = {
+                            'status': 'success',
+                            'count': len(result)
+                        }
+                        for entity in result:
+                            trends[entity]['count'] += 1
+                            trends[entity]['sources'].add(source_type)
+                    except Exception as e:
+                        debug_data['sources'][source_type] = {
+                            'status': 'failed',
+                            'error': str(e)
+                        }
+                        debug_data['errors'].append(str(e))
+                        logging.error(f"{source_type} failed: {str(e)}")
+
+            debug_data['performance']['fetch_duration'] = (
+                datetime.now() - self.start_time
+            ).total_seconds()
+
+            analysis_start = datetime.now()
+            final_trends = self._analyze_trends(trends)
+            debug_data['performance']['analysis_duration'] = (
+                datetime.now() - analysis_start
+            ).total_seconds()
+
+            return final_trends, debug_data
+        except Exception as e:
+            debug_data['errors'].append(str(e))
+            raise
 
     def _analyze_trends(self, trends):
         try:
             entities = list(trends.keys())
+            if not entities:
+                return []
+                
             embeddings = self.model.encode(entities)
             clusters = DBSCAN(eps=0.35, min_samples=2).fit_predict(embeddings)
             
@@ -156,25 +205,158 @@ class TrendRadar:
             logging.warning(f"arXiv failed: {str(e)}")
             return []
 
-# ========== UI ==========
+# ========== UI COMPONENTS ==========
 app.layout = dbc.Container([
-    dcc.Interval(id='refresh', interval=300*1000),
-    dbc.Row(dbc.Col(html.H1("Global Trend Radar", className="header"))),
-    dbc.Row(id='trend-grid', className="g-2")
+    dcc.Interval(id='refresh', interval=300*1000, disabled=False),
+    dcc.Store(id='debug-store', data={'logs': [], 'status': 'init'}),
+    
+    dbc.Row([
+        dbc.Col(html.H1("Global Trend Radar", className="header"), width=8),
+        dbc.Col(
+            dbc.Switch(
+                id="debug-toggle",
+                label="Diagnostics Mode",
+                value=False,
+                persistence=True
+            ), width=4
+        )
+    ]),
+    
+    dbc.Row(
+        dbc.Col(
+            dbc.Alert(
+                "Initializing trend detection engine...",
+                id="init-alert",
+                color="info",
+                className="mb-3"
+            )
+        )
+    ),
+    
+    dbc.Row(id='trend-grid'),
+    
+    dbc.Row(
+        dbc.Col(
+            html.Div(
+                id='debug-console',
+                className="debug-console",
+                style={'display': 'none'}
+            )
+        )
+    ),
+    
+    dcc.Loading(
+        id="loading-spinner",
+        type="circle",
+        children=[html.Div(id="loading-output")],
+        className="loading-spinner"
+    )
 ], fluid=True)
 
+# ========== CALLBACKS ==========
 @app.callback(
-    Output('trend-grid', 'children'),
-    Input('refresh', 'n_intervals')
+    [Output('trend-grid', 'children'),
+     Output('debug-store', 'data'),
+     Output('init-alert', 'children'),
+     Output('init-alert', 'color'),
+     Output('init-alert', 'style')],
+    [Input('refresh', 'n_intervals')],
+    [State('debug-store', 'data')],
+    prevent_initial_call=False
 )
-def update_interface(n):
+def update_interface(n_intervals, stored_data):
+    ctx = dash.callback_context
+    initial_call = not ctx.triggered
+
     try:
+        if initial_call:
+            print("First load initialization")
+            return (
+                no_update,
+                {'logs': [], 'status': 'loading'},
+                "Warming up analysis engine...",
+                "warning",
+                {'display': 'block'}
+            )
+
         engine = TrendRadar()
-        trends = engine.get_trends()
-        return create_cards(trends)
+        trends, debug_data = engine.get_trends()
+        
+        logs = stored_data.get('logs', [])[-9:] + [{
+            'timestamp': datetime.now().isoformat(),
+            'status': 'success' if trends else 'empty',
+            'sources': {k: v for k, v in debug_data['sources'].items()},
+            'errors': debug_data['errors'],
+            'performance': debug_data['performance']
+        }]
+
+        if not trends:
+            return (
+                error_card("No trends found - check data sources"),
+                {'logs': logs, 'status': 'empty'},
+                "No trends detected - running diagnostics...",
+                "danger",
+                {'display': 'block'}
+            )
+
+        return (
+            create_cards(trends),
+            {'logs': logs, 'status': 'ready'},
+            "System operational - trends updating",
+            "success",
+            {'display': 'none'}
+        )
+
     except Exception as e:
-        logging.error(f"Critical failure: {str(e)}")
-        return error_card()
+        error_msg = f"Critical failure: {str(e)[:200]}"
+        print(f"Error: {error_msg}")
+        return (
+            error_card(error_msg),
+            {'logs': stored_data.get('logs', []), 'status': 'error'},
+            "System malfunction - check debug console",
+            "danger",
+            {'display': 'block'}
+        )
+
+@app.callback(
+    Output('debug-console', 'children'),
+    Output('debug-console', 'style'),
+    Input('debug-store', 'data'),
+    Input('debug-toggle', 'value')
+)
+def update_debug_panel(logs, show_debug):
+    console_style = {'display': 'block'} if show_debug else {'display': 'none'}
+    entries = []
+    
+    for entry in logs.get('logs', []):
+        entry_html = html.Div(
+            [
+                html.Span(f"[{entry['timestamp']}] ", className="debug-time"),
+                html.Span(entry.get('status', 'unknown').upper(), 
+                    className=f"status-{entry.get('status', 'unknown')}"),
+                html.Div([
+                    html.Div([
+                        html.Span(src, className="source-tag"),
+                        html.Span(f"{info['status']} ({info.get('count',0)})", 
+                                className=f"source-{info['status']}")
+                    ]) for src, info in entry.get('sources', {}).items()
+                ], className="source-status"),
+                html.Div([
+                    html.Div([
+                        html.Div(f"{metric['fetch_duration']:.1f}s", className="metric-value"),
+                        html.Div("Data Fetch", className="metric-label")
+                    ], className="metric-card"),
+                    html.Div([
+                        html.Div(f"{metric['analysis_duration']:.1f}s", className="metric-value"),
+                        html.Div("Analysis", className="metric-label")
+                    ], className="metric-card")
+                ], className="performance-metrics") if 'performance' in entry else None
+            ],
+            className="debug-entry"
+        )
+        entries.append(entry_html)
+    
+    return entries, console_style
 
 def create_cards(trends):
     ICON_MAP = {'web': '🌐', 'news': '📰', 'stocks': '💹', 'research': '📚'}
@@ -201,13 +383,14 @@ def create_cards(trends):
         ) for entity, score, sources in trends
     ] if trends else error_card()
 
-def error_card():
+def error_card(message="Temporary data outage - next scan in 5 minutes"):
     return dbc.Col(
         dbc.Card([
-            dbc.CardBody("⚠️ Temporary data outage - next scan in 5 minutes")
+            dbc.CardBody(message)
         ], className="error-card"),
         width=12
     )
 
 if __name__ == "__main__":
+    print("Starting application server")
     app.run_server(debug=False)
